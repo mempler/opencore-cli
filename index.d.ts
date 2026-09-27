@@ -834,7 +834,7 @@ export interface BuildConfig {
    * @example
    * ```ts
    * build: {
-   *   typegen: { enabled: true, strict: false }
+   *   typegen: { enabled: true, strict: true }
    * }
    * ```
    */
@@ -894,13 +894,12 @@ export interface TypegenConfig {
    * These are type errors: they show in the editor and in `tsc`, and fail `opencore build`
    * only when `build.typecheck` is enabled.
    *
-   * Off by default so that enabling typegen cannot break code that compiles today: a project
-   * legitimately emits names that no OpenCore handler declares, such as events handled by
-   * non-OpenCore resources. With `strict: false` those names are still accepted while known
-   * names keep their autocomplete and payload checking. The framework's own `opencore:*`
-   * events are accepted in both modes.
+   * Set it to `false` when the project legitimately emits names that no OpenCore handler
+   * declares, such as events handled by non-OpenCore resources: those names are then accepted
+   * while known names keep their autocomplete and payload checking. The framework's own
+   * `opencore:*` events are accepted in both modes.
    *
-   * @default false
+   * @default true
    */
   strict?: boolean;
 }

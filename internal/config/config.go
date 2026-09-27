@@ -389,7 +389,7 @@ func (b *BuildConfig) TypecheckEnabled() bool {
 // that give end-to-end type safety to net events, RPCs and commands.
 type TypegenConfig struct {
 	Enabled *bool `json:"enabled,omitempty"`
-	Strict  bool  `json:"strict,omitempty"`
+	Strict  *bool `json:"strict,omitempty"`
 }
 
 // TypegenEnabled reports whether type generation should run. Defaults to true.
@@ -400,12 +400,12 @@ func (b *BuildConfig) TypegenEnabled() bool {
 	return *b.Typegen.Enabled
 }
 
-// TypegenStrict reports whether generated files should opt into strict mode.
+// TypegenStrict reports whether generated files should opt into strict mode. Defaults to true.
 func (b *BuildConfig) TypegenStrict() bool {
-	if b == nil || b.Typegen == nil {
-		return false
+	if b == nil || b.Typegen == nil || b.Typegen.Strict == nil {
+		return true
 	}
-	return b.Typegen.Strict
+	return *b.Typegen.Strict
 }
 
 // EnvironmentOverride holds per-environment build overrides

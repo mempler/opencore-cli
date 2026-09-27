@@ -565,3 +565,26 @@ func TestTypecheckEnabled_DefaultsToFalse(t *testing.T) {
 		t.Fatal("expected an explicit true to enable typecheck")
 	}
 }
+
+func TestTypegenStrict_DefaultsToTrue(t *testing.T) {
+	var nilBuild *BuildConfig
+	if !nilBuild.TypegenStrict() || !(&BuildConfig{}).TypegenStrict() ||
+		!(&BuildConfig{Typegen: &TypegenConfig{}}).TypegenStrict() {
+		t.Fatal("expected strict mode to be on by default")
+	}
+	disabled := false
+	if (&BuildConfig{Typegen: &TypegenConfig{Strict: &disabled}}).TypegenStrict() {
+		t.Fatal("expected an explicit false to disable strict mode")
+	}
+}
+
+func TestTypegenStrict_DecodesExplicitFalse(t *testing.T) {
+	var cfg Config
+	err := json.Unmarshal([]byte(`{"name":"project","core":{"path":"./core","resourceName":"core"},"build":{"typegen":{"strict":false}}}`), &cfg)
+	if err != nil {
+		t.Fatalf("decode failed: %v", err)
+	}
+	if cfg.Build.TypegenStrict() {
+		t.Fatal("expected strict: false in the config to disable strict mode")
+	}
+}
