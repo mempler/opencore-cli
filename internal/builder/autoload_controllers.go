@@ -75,7 +75,8 @@ func scanResourceTypeScriptFiles(resourcePath string, baseDir string, serverOutF
 		}
 		relPath = filepath.ToSlash(relPath)
 
-		lines := strings.Split(text, "\n")
+		lines := strings.Split(blankNonCode(text, false), "\n")
+		codeLines := strings.Split(blankNonCode(text, true), "\n")
 		clientDecoratorLine := 0
 		serverDecoratorLine := 0
 		controllerDecoratorLine := 0
@@ -84,13 +85,14 @@ func scanResourceTypeScriptFiles(resourcePath string, baseDir string, serverOutF
 
 		for idx, line := range lines {
 			lineNumber := idx + 1
-			if clientDecoratorLine == 0 && clientDecoratorPattern.MatchString(line) {
+			code := codeLines[idx]
+			if clientDecoratorLine == 0 && clientDecoratorPattern.MatchString(code) {
 				clientDecoratorLine = lineNumber
 			}
-			if serverDecoratorLine == 0 && serverDecoratorPattern.MatchString(line) {
+			if serverDecoratorLine == 0 && serverDecoratorPattern.MatchString(code) {
 				serverDecoratorLine = lineNumber
 			}
-			if controllerDecoratorLine == 0 && controllerDecoratorPattern.MatchString(line) {
+			if controllerDecoratorLine == 0 && controllerDecoratorPattern.MatchString(code) {
 				controllerDecoratorLine = lineNumber
 			}
 			if frameworkServerImportLine == 0 && frameworkServerImportPattern.MatchString(line) {
@@ -135,10 +137,11 @@ func scanResourceTypeScriptFiles(resourcePath string, baseDir string, serverOutF
 			})
 		}
 
-		hasServerController := serverControllerDecoratorPattern.MatchString(text)
-		hasClientController := clientControllerDecoratorPattern.MatchString(text)
+		code := strings.Join(codeLines, "\n")
+		hasServerController := serverControllerDecoratorPattern.MatchString(code)
+		hasClientController := clientControllerDecoratorPattern.MatchString(code)
 
-		hasGenericController := controllerDecoratorPattern.MatchString(text)
+		hasGenericController := controllerDecoratorPattern.MatchString(code)
 		if hasGenericController {
 			if frameworkServerImportLine > 0 && frameworkClientImportLine == 0 {
 				hasServerController = true
@@ -249,4 +252,18 @@ func (rb *ResourceBuilder) generateAutoloadControllers(resourcePath string) erro
 	}
 
 	return nil
+}
+
+var nonCodePattern = regexp.MustCompile(`//[^\n]*|/\*[\s\S]*?\*/|'(?:\\.|[^'\\\n])*'|"(?:\\.|[^"\\\n])*"|` + "`(?:\\\\.|[^`\\\\])*`")
+
+var nonNewlinePattern = regexp.MustCompile(`[^\n\r]`)
+
+// blankNonCode replaces comments, and optionally string literals, with spaces, keeping line breaks.
+func blankNonCode(text string, withStrings bool) string {
+	return nonCodePattern.ReplaceAllStringFunc(text, func(match string) string {
+		if !withStrings && match[0] != '/' {
+			return match
+		}
+		return nonNewlinePattern.ReplaceAllString(match, " ")
+	})
 }

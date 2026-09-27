@@ -1,6 +1,6 @@
 {
   "name": "@open-core/cli",
-  "version": "1.6.0",
+  "version": "1.6.1",
   "description": "Official CLI tool for OpenCore Framework",
   "main": "index.js",
   "types": "index.d.ts",
@@ -26,6 +26,10 @@
     "esbuild": "^0.27.2",
     "@swc/core": "^1.15.8",
     "tsconfig-paths": "^4.2.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "typescript-7": "npm:typescript@^7.0.2"
   },
   "repository": {
     "type": "git",
