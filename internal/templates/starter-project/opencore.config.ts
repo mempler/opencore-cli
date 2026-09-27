@@ -53,7 +53,12 @@ export default defineConfig({
     },
     client: {
       target: 'es2020',
-    }{{ end }}
+    }{{ end }},
+    typecheck: true, // `opencore build` fails on type errors; `opencore dev` only warns
+    typegen: {
+      enabled: true,
+      strict: true, // unknown event/RPC/WebView names are compile errors; false accepts them
+    },
   },
 
   dev: {

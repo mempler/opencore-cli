@@ -39,7 +39,7 @@ func New(cfg *config.Config) (*Watcher, error) {
 
 	watcher := &Watcher{
 		config:         cfg,
-		builder:        builder.New(cfg),
+		builder:        newDevBuilder(cfg),
 		watcher:        w,
 		debounceTimers: make(map[string]*time.Timer),
 		logQueue:       make(chan LogMessage, 256),
@@ -187,7 +187,7 @@ func (w *Watcher) Watch(ctx context.Context) error {
 							return
 						}
 						w.config = newCfg
-						w.builder = builder.New(newCfg)
+						w.builder = newDevBuilder(newCfg)
 						newRestarter, restarterErr := newRestarter(newCfg)
 						if restarterErr != nil {
 							fmt.Println(ui.Error(fmt.Sprintf("Failed to configure restart mode: %v", restarterErr)))
@@ -247,8 +247,10 @@ func (w *Watcher) Watch(ctx context.Context) error {
 					}
 					w.buildingMutex.Unlock()
 
-					// Perform the build
 					fmt.Println(ui.Info(fmt.Sprintf("File changed: %s", filepath.Base(fileName))))
+
+					w.regenerateTypes(affected)
+
 					results, err := w.builder.BuildTasksContext(ctx, affected)
 
 					// Unmark resources as being built
@@ -286,7 +288,7 @@ func (w *Watcher) Watch(ctx context.Context) error {
 					if newCfg != nil {
 						_ = os.Chdir(root)
 						w.config = newCfg
-						w.builder = builder.New(newCfg)
+						w.builder = newDevBuilder(newCfg)
 						allTasks = w.builder.CollectTasks()
 					}
 				}
@@ -359,6 +361,25 @@ func (w *Watcher) registerPaths() {
 
 		if err == nil {
 			fmt.Println(ui.Info(fmt.Sprintf("Watching: %s (recursive)", basePath)))
+		}
+	}
+}
+
+func (w *Watcher) regenerateTypes(tasks []builder.BuildTask) {
+	resourceBuilder := w.builder.ResourceBuilder()
+	if resourceBuilder == nil {
+		return
+	}
+
+	seen := make(map[string]bool, len(tasks))
+	for _, task := range tasks {
+		if task.Type == builder.TypeViews || seen[task.Path] {
+			continue
+		}
+		seen[task.Path] = true
+
+		if resourceBuilder.RunTypegen(task.Path) {
+			fmt.Println(ui.Muted(fmt.Sprintf("  types regenerated: %s", task.ResourceName)))
 		}
 	}
 }
@@ -645,4 +666,12 @@ func (w *Watcher) displayLog(log LogMessage) {
 			fmt.Println(stackStyle.Render(log.Error.Stack))
 		}
 	}
+}
+
+// newDevBuilder returns a builder whose type check warns instead of failing, so a type error
+// never stops the watch loop.
+func newDevBuilder(cfg *config.Config) *builder.Builder {
+	b := builder.New(cfg)
+	b.SetTypecheckWarnOnly(true)
+	return b
 }
