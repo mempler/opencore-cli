@@ -6,9 +6,13 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 )
+
+// identifierPattern matches a bare JavaScript identifier, used to spot alias references inside a rendered type expression.
+var identifierPattern = regexp.MustCompile(`[A-Za-z_$][A-Za-z0-9_$]*`)
 
 const (
 	viewTypegenFileName          = "opencore.gen.ts"
@@ -238,7 +242,7 @@ func (s *viewScan) messagesTheViewReceives() ([]viewEntry, []SourceValidationIss
 		if payload == "" {
 			payload = "unknown"
 			warnings = append(warnings, *s.issuef(loc[0],
-				"%s %q; the WebView receives `unknown` (install typescript so the checker pass can resolve it, or forward the handler's parameter directly)",
+				"%s %q; the WebView receives `unknown` (pass a parameter of the enclosing method, e.g. `send(name, data)` inside `method(data: Payload)`)",
 				viewPayloadUnresolvedPrefix, eventName))
 		}
 
@@ -418,10 +422,6 @@ func (rb *ResourceBuilder) generateViewTypes(resourcePath string) (*TypegenResul
 		return nil, true, err
 	}
 
-	collector.uiReceives, collector.warnings = rb.refineViewPayloads(
-		resourcePath, viewPath, outDir, collector.scannedFiles,
-		collector.uiReceives, collector.warnings,
-	)
 	collector.finalise(filepath.Base(viewPath))
 
 	changed, err := writeIfChanged(filepath.Join(outDir, viewTypegenFileName), collector.render())
@@ -436,10 +436,9 @@ type viewCollector struct {
 	resourcePath string
 	outDir       string
 
-	uiSends      []viewEntry
-	uiReceives   []viewEntry
-	warnings     []SourceValidationIssue
-	scannedFiles []string
+	uiSends    []viewEntry
+	uiReceives []viewEntry
+	warnings   []SourceValidationIssue
 
 	controllerImports map[string]string
 	aliasByClass      map[string]string
@@ -469,8 +468,6 @@ func (c *viewCollector) collectFile(path string, text string) error {
 	if err != nil {
 		return err
 	}
-
-	c.scannedFiles = append(c.scannedFiles, path)
 
 	sends, receives, warnings := scanFileForViewTypes(
 		text, relativeSourcePath(c.resourcePath, path), classes,
@@ -570,4 +567,25 @@ func (rb *ResourceBuilder) removeGeneratedViewTypes(resourcePath string) error {
 		return err
 	}
 	return nil
+}
+
+// pruneUnusedControllerImports keeps only the controller aliases some rendered payload refers to.
+func pruneUnusedControllerImports(
+	controllerImports map[string]string,
+	entries ...[]viewEntry,
+) map[string]string {
+	referenced := map[string]bool{}
+	for _, entry := range slices.Concat(entries...) {
+		for _, identifier := range identifierPattern.FindAllString(entry.PayloadType, -1) {
+			referenced[identifier] = true
+		}
+	}
+
+	pruned := make(map[string]string, len(controllerImports))
+	for alias, importPath := range controllerImports {
+		if referenced[alias] {
+			pruned[alias] = importPath
+		}
+	}
+	return pruned
 }
