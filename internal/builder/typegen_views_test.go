@@ -427,3 +427,107 @@ export class PlainService {
 		t.Fatalf("expected empty maps, got:\n%s", content)
 	}
 }
+
+func TestGenerateTypes_RegistersViewMessages(t *testing.T) {
+	resourcePath := t.TempDir()
+	rb := NewResourceBuilder(".")
+
+	writeTestFile(t, resourcePath, "src/client/hud.controller.ts", `
+@Client.Controller()
+export class HudController {
+  @Client.OnNet('hud:setState')
+  setState(state: HudState): void {
+    WebView.send('hud:state', state)
+  }
+
+  @Client.OnView('hud:close')
+  close(data: ClosePayload): void {}
+}
+`)
+
+	if _, err := rb.generateTypes(resourcePath, TypegenOptions{}); err != nil {
+		t.Fatalf("generateTypes returned error: %v", err)
+	}
+
+	content := readGenFile(t, resourcePath)
+	for _, want := range []string{
+		// send() feeds what the client may send into a WebView ...
+		"'hud:state': Parameters<V0_HudController['setState']>[0]",
+		"viewSend: GenViewSend",
+		// ... and @Client.OnView what a WebView may send back.
+		"'hud:close': __Payload<Parameters<V0_HudController['close']>>",
+		"viewReceive: GenViewReceive",
+		"type __Payload<",
+		// Imports are relative to the resource's own .opencore/, not to a view directory.
+		"import('../src/client/hud.controller').HudController",
+	} {
+		if !strings.Contains(content, want) {
+			t.Fatalf("expected %q in the generated file, got:\n%s", want, content)
+		}
+	}
+}
+
+func TestGenerateTypes_RegistersViewMessagesWithoutAViewDirectory(t *testing.T) {
+	resourcePath := t.TempDir()
+	rb := NewResourceBuilder(".")
+
+	// The WebView a client talks to may live in another resource, so there is no ui/ here.
+	writeTestFile(t, resourcePath, "src/client/hud.controller.ts", `
+@Client.Controller()
+export class HudController {
+  @Client.OnView('hud:close')
+  close(): void {}
+}
+`)
+
+	if _, err := rb.generateTypes(resourcePath, TypegenOptions{}); err != nil {
+		t.Fatalf("generateTypes returned error: %v", err)
+	}
+
+	content := readGenFile(t, resourcePath)
+	if !strings.Contains(content, "viewReceive: GenViewReceive") {
+		t.Fatalf("expected the view map to be registered, got:\n%s", content)
+	}
+	if strings.Contains(content, "viewSend:") {
+		t.Fatalf("expected no viewSend map without send() calls, got:\n%s", content)
+	}
+	if _, err := os.Stat(filepath.Join(resourcePath, "ui", ".opencore")); !os.IsNotExist(err) {
+		t.Fatalf("expected no view file without a view directory, stat err: %v", err)
+	}
+}
+
+func TestGenerateTypes_ReportsUnresolvedViewPayloadOnce(t *testing.T) {
+	resourcePath := t.TempDir()
+	rb := NewResourceBuilder(".")
+
+	if err := os.MkdirAll(filepath.Join(resourcePath, "ui"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	writeTestFile(t, resourcePath, "src/client/hud.controller.ts", `
+@Client.Controller()
+export class HudController {
+  @Client.OnNet('hud:setCash')
+  setCash(amount: number): void {
+    WebView.send('hud:update', { cash: amount })
+  }
+}
+`)
+
+	result, err := rb.generateTypes(resourcePath, TypegenOptions{})
+	if err != nil {
+		t.Fatalf("generateTypes returned error: %v", err)
+	}
+	if len(result.Warnings) != 1 || !strings.HasPrefix(result.Warnings[0].Message, viewPayloadUnresolvedPrefix) {
+		t.Fatalf("expected the unresolved payload warning, got %v", result.Warnings)
+	}
+	if content := readGenFile(t, resourcePath); !strings.Contains(content, "'hud:update': unknown") {
+		t.Fatalf("expected an unresolved payload to register as unknown, got:\n%s", content)
+	}
+}
+
+func TestRenderTypegenFile_EmptyWithoutHandlersOrViews(t *testing.T) {
+	content := renderTypegenFile(nil, registeredViews{}, TypegenOptions{ResourceKey: "resource:x"})
+	if !strings.HasSuffix(content, "export {};\n") || strings.Contains(content, "declare module") {
+		t.Fatalf("expected an empty module, got:\n%s", content)
+	}
+}

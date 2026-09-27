@@ -308,16 +308,24 @@ func resolveNameArgument(
 	return display, resolvedKey, true
 }
 
+const entryHelperDecl = "/** Single-key map, used when an event name comes from a shared const object. */\n" +
+	"type __Entry<K extends PropertyKey, V> = { [P in K]: V }\n"
+
+const payloadHelperDecl = "/** First parameter of a handler, or `undefined` when it takes none. */\n" +
+	"type __Payload<P extends unknown[]> = P extends [infer First, ...unknown[]] ? First : undefined\n"
+
 func writeViewHelpers(b *strings.Builder, entries []viewEntry) {
-	if slices.ContainsFunc(entries, func(e viewEntry) bool { return e.KeyType != "" }) {
-		b.WriteString("/** Single-key map, used when an event name comes from a shared const object. */\n")
-		b.WriteString("type __Entry<K extends PropertyKey, V> = { [P in K]: V }\n")
+	if slices.ContainsFunc(entries, hasComputedViewKey) {
+		b.WriteString(entryHelperDecl)
 	}
 	if slices.ContainsFunc(entries, usesPayloadHelper) {
-		b.WriteString("/** First parameter of a handler, or `undefined` when it takes none. */\n")
-		b.WriteString("type __Payload<P extends unknown[]> = P extends [infer First, ...unknown[]] ? First : undefined\n")
+		b.WriteString(payloadHelperDecl)
 	}
 	b.WriteString("\n")
+}
+
+func hasComputedViewKey(e viewEntry) bool {
+	return e.KeyType != ""
 }
 
 func usesPayloadHelper(e viewEntry) bool {
@@ -415,14 +423,10 @@ func (rb *ResourceBuilder) generateViewTypes(resourcePath string) (*TypegenResul
 	}
 
 	outDir := filepath.Join(viewPath, ".opencore")
-	collector := newViewCollector(resourcePath, outDir)
-
-	err := walkSourceFiles(resourcePath, viewPath, collector.collectFile)
+	collector, err := rb.collectViewMessages(resourcePath, outDir, filepath.Base(viewPath))
 	if err != nil {
 		return nil, true, err
 	}
-
-	collector.finalise(filepath.Base(viewPath))
 
 	changed, err := writeIfChanged(filepath.Join(outDir, viewTypegenFileName), collector.render())
 	if err != nil {
@@ -430,6 +434,17 @@ func (rb *ResourceBuilder) generateViewTypes(resourcePath string) (*TypegenResul
 	}
 
 	return &TypegenResult{Warnings: collector.warnings, Changed: changed}, true, nil
+}
+
+// collectViewMessages scans a resource's client code for WebView messages, rendering every type
+// expression relative to outDir. label names the view in diagnostics.
+func (rb *ResourceBuilder) collectViewMessages(resourcePath string, outDir string, label string) (*viewCollector, error) {
+	collector := newViewCollector(resourcePath, outDir)
+	if err := walkSourceFiles(resourcePath, rb.viewPathFor(resourcePath), collector.collectFile); err != nil {
+		return nil, err
+	}
+	collector.finalise(label)
+	return collector, nil
 }
 
 type viewCollector struct {
@@ -506,6 +521,30 @@ func (c *viewCollector) render() string {
 		c.uiSends, c.uiReceives,
 		pruneUnusedControllerImports(c.controllerImports, c.uiSends, c.uiReceives),
 	)
+}
+
+// registered returns the messages this resource contributes to the framework's `Register`.
+func (c *viewCollector) registered() registeredViews {
+	return registeredViews{
+		send:              c.uiReceives,
+		receive:           c.uiSends,
+		controllerImports: pruneUnusedControllerImports(c.controllerImports, c.uiSends, c.uiReceives),
+	}
+}
+
+// registeredViews holds the `viewSend`/`viewReceive` maps a resource's generated file registers.
+type registeredViews struct {
+	send              []viewEntry
+	receive           []viewEntry
+	controllerImports map[string]string
+}
+
+func (v registeredViews) empty() bool {
+	return len(v.send) == 0 && len(v.receive) == 0
+}
+
+func (v registeredViews) all() []viewEntry {
+	return slices.Concat(v.send, v.receive)
 }
 
 func isViewMessageSource(path string, text string) bool {
