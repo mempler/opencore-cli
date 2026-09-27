@@ -839,6 +839,20 @@ export interface BuildConfig {
    * ```
    */
   typegen?: TypegenConfig;
+
+  /**
+   * Type-check the project with its own `tsc --noEmit` (root `tsconfig.json`).
+   *
+   * Bundling only strips types, so without this a type error — including an unknown name under
+   * `typegen.strict` — never fails a build. When enabled, `opencore build` regenerates the types
+   * and runs the check before bundling, and fails on any error without writing any output;
+   * `opencore dev` reports errors as warnings and keeps watching.
+   *
+   * Requires `typescript` installed in the project.
+   *
+   * @default false
+   */
+  typecheck?: boolean;
 }
 
 /**
@@ -876,6 +890,9 @@ export interface TypegenConfig {
 
   /**
    * Treat unknown event, RPC and WebView message names as compile errors.
+   *
+   * These are type errors: they show in the editor and in `tsc`, and fail `opencore build`
+   * only when `build.typecheck` is enabled.
    *
    * Off by default so that enabling typegen cannot break code that compiles today: a project
    * legitimately emits names that no OpenCore handler declares, such as events handled by

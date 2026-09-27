@@ -39,7 +39,7 @@ func New(cfg *config.Config) (*Watcher, error) {
 
 	watcher := &Watcher{
 		config:         cfg,
-		builder:        builder.New(cfg),
+		builder:        newDevBuilder(cfg),
 		watcher:        w,
 		debounceTimers: make(map[string]*time.Timer),
 		logQueue:       make(chan LogMessage, 256),
@@ -187,7 +187,7 @@ func (w *Watcher) Watch(ctx context.Context) error {
 							return
 						}
 						w.config = newCfg
-						w.builder = builder.New(newCfg)
+						w.builder = newDevBuilder(newCfg)
 						newRestarter, restarterErr := newRestarter(newCfg)
 						if restarterErr != nil {
 							fmt.Println(ui.Error(fmt.Sprintf("Failed to configure restart mode: %v", restarterErr)))
@@ -288,7 +288,7 @@ func (w *Watcher) Watch(ctx context.Context) error {
 					if newCfg != nil {
 						_ = os.Chdir(root)
 						w.config = newCfg
-						w.builder = builder.New(newCfg)
+						w.builder = newDevBuilder(newCfg)
 						allTasks = w.builder.CollectTasks()
 					}
 				}
@@ -666,4 +666,12 @@ func (w *Watcher) displayLog(log LogMessage) {
 			fmt.Println(stackStyle.Render(log.Error.Stack))
 		}
 	}
+}
+
+// newDevBuilder returns a builder whose type check warns instead of failing, so a type error
+// never stops the watch loop.
+func newDevBuilder(cfg *config.Config) *builder.Builder {
+	b := builder.New(cfg)
+	b.SetTypecheckWarnOnly(true)
+	return b
 }

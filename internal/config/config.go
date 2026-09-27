@@ -373,6 +373,16 @@ type BuildConfig struct {
 	Environment          string                         `json:"environment,omitempty"`
 	Environments         map[string]EnvironmentOverride `json:"environments,omitempty"`
 	Typegen              *TypegenConfig                 `json:"typegen,omitempty"`
+	Typecheck            *bool                          `json:"typecheck,omitempty"`
+}
+
+// TypecheckEnabled reports whether builds type-check the project with `tsc --noEmit`.
+// Defaults to false, so upgrading the CLI never breaks a project that bundles today.
+func (b *BuildConfig) TypecheckEnabled() bool {
+	if b == nil || b.Typecheck == nil {
+		return false
+	}
+	return *b.Typecheck
 }
 
 // TypegenConfig controls generation of the per-resource `.opencore/opencore.gen.ts` files

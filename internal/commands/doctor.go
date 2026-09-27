@@ -268,6 +268,9 @@ func checkTypegen(cfg *config.Config) CheckResult {
 	mode := "enabled"
 	if cfg.Build.TypegenStrict() {
 		mode = "enabled (strict: unknown event names are compile errors)"
+		if !cfg.Build.TypecheckEnabled() {
+			mode += "; builds do not type-check, set build.typecheck to fail on them"
+		}
 	}
 
 	return CheckResult{Name: "Type generation", Passed: true, Message: mode}
