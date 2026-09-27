@@ -27,9 +27,6 @@ type ResourceBuilder struct {
 	typegenWarned      map[string]bool
 	typegenWarnedMutex sync.Mutex
 	viewPathResolver   func(resourcePath string) string
-
-	viewPayloadCache map[string]viewPayloadCacheEntry
-	viewPayloadMutex sync.Mutex
 }
 
 func (rb *ResourceBuilder) ConfigureTypegen(enabled bool, opts TypegenOptions) {
