@@ -537,8 +537,7 @@ async function analyze(request) {
 
 analyze(JSON.parse(fs.readFileSync(0, 'utf8'))).then(
     (response) => {
-        process.stdout.write(JSON.stringify(response))
-        process.exit(0)
+        process.stdout.write(JSON.stringify(response), () => process.exit(0))
     },
     (err) => {
         process.stderr.write(err && err.message ? err.message : String(err))

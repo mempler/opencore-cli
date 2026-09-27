@@ -1,6 +1,8 @@
 package builder
 
 import (
+	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -469,5 +471,40 @@ export class BankController {
 	}
 	if content := readGenFile(t, resource); !strings.Contains(content, "'bank:withdraw'") {
 		t.Fatalf("expected the edit to be picked up, got:\n%s", content)
+	}
+}
+
+// The analyzer's stdout is a pipe, which Node writes asynchronously: the response must survive past 64 KB.
+func TestTypegen_AnalyzerResponseLargerThanAPipeBuffer(t *testing.T) {
+	resource := t.TempDir()
+	rb := newTypegenBuilder(t, resource)
+	const controllers = 400
+	for i := range controllers {
+		writeTestFile(t, resource, fmt.Sprintf("src/server/c%03d.controller.ts", i), fmt.Sprintf(`
+@Server.Controller()
+export class C%03dController {
+  @Server.OnNet('c%03d:event')
+  handle(player: unknown) {}
+}
+`, i, i))
+	}
+
+	var files []string
+	for i := range controllers {
+		file, _ := filepath.Abs(filepath.Join(resource, fmt.Sprintf("src/server/c%03d.controller.ts", i)))
+		files = append(files, file)
+	}
+	response, err := rb.runAnalyzer(files, filepath.Join(resource, typecheckConfigFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if encoded, _ := json.Marshal(response); len(encoded) <= 64*1024 {
+		t.Fatalf("fixture too small to cross the pipe buffer: %d bytes", len(encoded))
+	}
+	for i, file := range files {
+		handlers := response.Files[file].Handlers
+		if len(handlers) != 1 || handlers[0].Event != fmt.Sprintf("c%03d:event", i) {
+			t.Fatalf("%s: unexpected handlers %+v", file, handlers)
+		}
 	}
 }
