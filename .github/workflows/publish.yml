@@ -46,6 +46,16 @@ jobs:
         with:
           go-version: "1.24.5"
 
+      - name: Setup Node
+        if: ${{ matrix.isPublisher }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Install test dependencies
+        if: ${{ matrix.isPublisher }}
+        run: npm install --ignore-scripts --no-package-lock
+
       - name: Go tests
         if: ${{ matrix.isPublisher }}
         run: go test ./...
@@ -63,12 +73,6 @@ jobs:
         with:
           name: ${{ matrix.artifact }}
           path: ${{ matrix.artifact }}
-
-      - name: Setup Node
-        if: ${{ matrix.isPublisher }}
-        uses: actions/setup-node@v4
-        with:
-          node-version: "24"
 
       - name: Update package version
         if: ${{ matrix.isPublisher }}
