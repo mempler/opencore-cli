@@ -97,7 +97,7 @@ func New(cfg *config.Config) (*Watcher, error) {
 
 	watcher := &Watcher{
 		config:   cfg,
-		builder:  builder.New(cfg),
+		builder:  newDevBuilder(cfg),
 		watcher:  w,
 		logQueue: make(chan LogMessage, 256),
 	}
@@ -303,7 +303,7 @@ func (w *Watcher) Watch(ctx context.Context) error {
 					}
 					restarter = newRestarter
 					w.config = newCfg
-					w.builder = builder.New(newCfg)
+					w.builder = newDevBuilder(newCfg)
 					generation++
 					tasksDirty = true
 					w.registerPaths()
@@ -809,4 +809,12 @@ func (w *Watcher) displayLog(log LogMessage) {
 			fmt.Println(stackStyle.Render(log.Error.Stack))
 		}
 	}
+}
+
+// newDevBuilder returns a builder whose type check warns instead of failing, so a type error
+// never stops the watch loop.
+func newDevBuilder(cfg *config.Config) *builder.Builder {
+	b := builder.New(cfg)
+	b.SetTypecheckWarnOnly(true)
+	return b
 }

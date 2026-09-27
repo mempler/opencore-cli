@@ -26,6 +26,8 @@ type Builder struct {
 	config          *config.Config
 	resourceBuilder *ResourceBuilder
 	deployer        *Deployer
+
+	typecheckWarnOnly bool
 }
 
 func normalizedBuildPath(p string) string {
@@ -217,6 +219,9 @@ func (b *Builder) BuildWithOutputContext(ctx context.Context, requestedMode Outp
 	if err := b.validateTaskSources(tasks); err != nil {
 		return err
 	}
+	if err := b.typecheck(ctx, tasks, plain); err != nil {
+		return err
+	}
 	sharedOptions, sharedName, err := b.sharedDependencyOptions(tasks)
 	if err != nil {
 		return err
@@ -320,6 +325,9 @@ func (b *Builder) BuildTasksContext(ctx context.Context, tasks []BuildTask) ([]B
 	}
 
 	if err := b.validateTaskSources(tasks); err != nil {
+		return nil, err
+	}
+	if err := b.typecheck(ctx, tasks, false); err != nil {
 		return nil, err
 	}
 	sharedOptions, sharedName, err := b.sharedDependencyOptions(tasks)

@@ -667,3 +667,14 @@ func TestGetResourceViews(t *testing.T) {
 		t.Error("Expected nil views for resource without views config")
 	}
 }
+
+func TestTypecheckEnabled_DefaultsToFalse(t *testing.T) {
+	var nilBuild *BuildConfig
+	if nilBuild.TypecheckEnabled() || (&BuildConfig{}).TypecheckEnabled() {
+		t.Fatal("expected typecheck to be off by default")
+	}
+	enabled := true
+	if !(&BuildConfig{Typecheck: &enabled}).TypecheckEnabled() {
+		t.Fatal("expected an explicit true to enable typecheck")
+	}
+}
